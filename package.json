@@ -1,0 +1,43 @@
+{
+  "name": "n8n-nodes-collaps",
+  "version": "1.0.0",
+  "description": "COLLAPS custom n8n nodes — PostgreSQL schema inspection and workflow metadata",
+  "main": "index.js",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "n8n-community-node-package",
+    "collaps",
+    "postgres"
+  ],
+  "author": "",
+  "license": "ISC",
+  "files": [
+    "dist"
+  ],
+  "n8n": {
+    "n8nNodesApiVersion": 1,
+    "nodes": [
+      "dist/nodes/CollapsDbConnection/CollapsDbConnection.node.js",
+      "dist/nodes/CollapsSchemaFetcher/CollapsSchemaFetcher.node.js",
+      "dist/nodes/CollapsTableSelector/CollapsTableSelector.node.js",
+      "dist/nodes/CollapsColumnSelector/CollapsColumnSelector.node.js",
+      "dist/nodes/CollapsDataWatcher/CollapsDataWatcher.node.js",
+      "dist/nodes/CollapsMethodConfigurator/CollapsMethodConfigurator.node.js",
+      "dist/nodes/CollapsKeyColumnMapper/CollapsKeyColumnMapper.node.js",
+      "dist/nodes/CollapsBttfTrigger/CollapsBttfTrigger.node.js"
+    ]
+  },
+  "dependencies": {
+    "pg": "^8.13.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/pg": "^8.11.10",
+    "n8n-workflow": "^1.70.0",
+    "typescript": "^5.7.2"
+  }
+}
