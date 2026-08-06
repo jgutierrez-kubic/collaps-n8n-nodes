@@ -1,5 +1,5 @@
 import type { IDataObject } from 'n8n-workflow';
-import type { IExecuteFunctions, ILoadOptionsFunctions } from 'n8n-workflow';
+import type { ILoadOptionsFunctions } from 'n8n-workflow';
 import pg from 'pg';
 
 import { logCollapsBlock } from './collapsLogger';
@@ -15,20 +15,6 @@ export interface PostgresCredentials {
 	ssl?: pg.ClientConfig['ssl'];
 }
 
-export const CLOUDSQL_PUBLIC_HOST = '136.116.101.31';
-export const DEFAULT_SELECTOR_SCHEMA = 's00001_incancer';
-
-export const DEFAULT_POSTGRES_CREDENTIALS: PostgresCredentials = {
-	host: CLOUDSQL_PUBLIC_HOST,
-	port: 5432,
-	user: 'n8n_user',
-	password: 'COLLAPS_n8n_2026!',
-	database: 'collaps',
-	ssl: { rejectUnauthorized: false },
-};
-
-type PostgresContext = ILoadOptionsFunctions | IExecuteFunctions;
-
 function buildClientConfig(credentials: PostgresCredentials): pg.ClientConfig {
 	return {
 		host: credentials.host,
@@ -43,35 +29,33 @@ function buildClientConfig(credentials: PostgresCredentials): pg.ClientConfig {
 export function resolveConnectionConfig(
 	input: IDataObject = {},
 	overrides: Partial<PostgresCredentials> = {},
-): PostgresCredentials {
-	return {
-		host: String(overrides.host ?? input.host ?? DEFAULT_POSTGRES_CREDENTIALS.host),
-		port: Number(overrides.port ?? input.port ?? DEFAULT_POSTGRES_CREDENTIALS.port),
-		database: String(overrides.database ?? input.database ?? DEFAULT_POSTGRES_CREDENTIALS.database),
-		user: String(overrides.user ?? input.user ?? DEFAULT_POSTGRES_CREDENTIALS.user),
-		password: String(overrides.password ?? input.password ?? DEFAULT_POSTGRES_CREDENTIALS.password),
-		ssl: { rejectUnauthorized: false },
-	};
-}
+): PostgresCredentials | null {
+	const host = String(overrides.host ?? input.host ?? '').trim();
+	const port = Number(overrides.port ?? input.port);
+	const database = String(overrides.database ?? input.database ?? '').trim();
+	const user = String(overrides.user ?? input.user ?? '').trim();
+	const password = String(overrides.password ?? input.password ?? '').trim();
 
-async function resolveCredentials(context: PostgresContext): Promise<PostgresCredentials | null> {
-	try {
-		const credentials = await context.getCredentials('postgres');
-		if (credentials?.host) {
-			return {
-				host: credentials.host as string,
-				port: (credentials.port as number) ?? 5432,
-				database: credentials.database as string,
-				user: credentials.user as string,
-				password: credentials.password as string,
-				ssl: { rejectUnauthorized: false },
-			};
-		}
-	} catch {
-		// Zero-Form: usar IP pública COLLAPS por defecto
+	if (
+		!host ||
+		!database ||
+		!user ||
+		!password ||
+		!Number.isInteger(port) ||
+		port < 1 ||
+		port > 65535
+	) {
+		return null;
 	}
 
-	return null;
+	return {
+		host,
+		port,
+		database,
+		user,
+		password,
+		ssl: { rejectUnauthorized: false },
+	};
 }
 
 export function toPostgresError(error: unknown): Error {
@@ -106,14 +90,17 @@ export async function withPostgresConnection<T>(
 }
 
 export async function withPostgresClient<T>(
-	context: PostgresContext,
+	_context: ILoadOptionsFunctions,
 	fn: (client: pg.Client) => Promise<T>,
 	connectionOverride?: PostgresCredentials,
 ): Promise<T> {
-	const credentials =
-		connectionOverride ?? (await resolveCredentials(context)) ?? DEFAULT_POSTGRES_CREDENTIALS;
+	if (!connectionOverride) {
+		throw new Error(
+			'PostgreSQL credentials are required from the connected COLLAPS Database Connection.',
+		);
+	}
 
-	return withPostgresConnection(credentials, fn);
+	return withPostgresConnection(connectionOverride, fn);
 }
 
 export function resolveSchema(schema?: string): string {
@@ -121,7 +108,7 @@ export function resolveSchema(schema?: string): string {
 }
 
 export function resolveSelectorSchema(schema?: string): string {
-	return schema?.trim() ? schema.trim() : DEFAULT_SELECTOR_SCHEMA;
+	return schema?.trim() ?? '';
 }
 
 export function resolveSchemaFromStream(
@@ -143,7 +130,7 @@ export function resolveSchemaFromStream(
 		return schema;
 	}
 
-	return DEFAULT_SELECTOR_SCHEMA;
+	return '';
 }
 
 export function quoteIdentifier(identifier: string): string {

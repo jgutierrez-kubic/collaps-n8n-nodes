@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.CollapsBttfTrigger = void 0;
 const n8n_workflow_1 = require("n8n-workflow");
 const collapsLogger_1 = require("../helpers/collapsLogger");
+const tableNameFormatter_1 = require("../helpers/tableNameFormatter");
 const NODE_NAME = 'CollapsBttfTrigger';
 const ENGINE_URL = 'https://bttf-engine-31997537275.us-central1.run.app/api/v1/condenser/job';
 function readRequiredBttfPayload(structureItem) {
@@ -26,16 +27,18 @@ function readRequiredMetodosCalculo(methodsItem) {
     }
     throw new Error('No metodos_calculo found on Input 1 (Calculation Methods). Connect COLLAPS Method Configurator.');
 }
-function resolveTablaDestino(schemaName, targetTable) {
-    const table = targetTable.trim();
-    if (!table) {
+function readPayloadString(payload, camelCaseKey, legacyKey) {
+    var _a, _b;
+    return String((_b = (_a = payload[camelCaseKey]) !== null && _a !== void 0 ? _a : payload[legacyKey]) !== null && _b !== void 0 ? _b : '').trim();
+}
+function resolveCallbackUrl(context) {
+    try {
+        const value = context.evaluateExpression('{{ $execution.resumeUrl }}', 0);
+        return String(value !== null && value !== void 0 ? value : '').replace(/^=/, '').trim();
+    }
+    catch {
         return '';
     }
-    if (table.includes('.')) {
-        return table;
-    }
-    const schema = String(schemaName !== null && schemaName !== void 0 ? schemaName : '').trim();
-    return schema ? `${schema}.${table}` : table;
 }
 class CollapsBttfTrigger {
     constructor() {
@@ -62,21 +65,13 @@ class CollapsBttfTrigger {
                     type: 'string',
                     default: 'My Analysis',
                     required: true,
-                    description: 'Human-readable analysis name sent as nombre_analisis.',
-                },
-                {
-                    displayName: 'Target Table',
-                    name: 'targetTable',
-                    type: 'string',
-                    default: 'c_resultados',
-                    required: true,
-                    description: 'Destination table for engine results (tabla_destino). Schema is prepended from the Mapper payload when omitted.',
+                    description: 'Human-readable analysis name. The targetTable API field is generated automatically as c_results_<camelCaseName>.',
                 },
             ],
         };
     }
     async execute() {
-        var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k;
+        var _a, _b, _c, _d, _e, _f, _g, _h, _j;
         const structureItems = this.getInputData(0);
         const methodsItems = this.getInputData(1);
         const returnData = [];
@@ -94,34 +89,26 @@ class CollapsBttfTrigger {
                 const basePayload = readRequiredBttfPayload(structureInput);
                 const metodosCalculo = readRequiredMetodosCalculo(methodsInput);
                 const analysisName = String((_j = this.getNodeParameter('analysisName', itemIndex, 'My Analysis')) !== null && _j !== void 0 ? _j : 'My Analysis').trim();
-                const targetTable = String((_k = this.getNodeParameter('targetTable', itemIndex, 'c_resultados')) !== null && _k !== void 0 ? _k : 'c_resultados').trim();
                 if (!analysisName) {
                     throw new Error('Analysis Name (analysisName) is required.');
                 }
-                if (!targetTable) {
-                    throw new Error('Target Table (targetTable) is required.');
-                }
-                let resolvedCallbackUrl = '';
-                try {
-                    resolvedCallbackUrl = this.evaluateExpression('{{ $execution.resumeUrl }}', 0);
-                    resolvedCallbackUrl = String(resolvedCallbackUrl !== null && resolvedCallbackUrl !== void 0 ? resolvedCallbackUrl : '')
-                        .replace(/^=/, '')
-                        .trim();
-                }
-                catch {
-                    // If evaluation fails or Wait/resume is not available, leave empty.
-                }
-                resolvedCallbackUrl = String(resolvedCallbackUrl !== null && resolvedCallbackUrl !== void 0 ? resolvedCallbackUrl : '').trim();
+                const callbackUrl = resolveCallbackUrl(this);
                 const payloadToSend = {
-                    ...basePayload,
-                    metodos_calculo: metodosCalculo,
-                    nombre_analisis: analysisName,
-                    tabla_destino: resolveTablaDestino(basePayload.schema_name, targetTable),
+                    source: readPayloadString(basePayload, 'source', 'source'),
+                    analysisId: readPayloadString(basePayload, 'analysisId', 'analysis_id'),
+                    schemaName: readPayloadString(basePayload, 'schemaName', 'schema_name'),
+                    analysisName,
+                    tableA: readPayloadString(basePayload, 'tableA', 'tabla_a'),
+                    tableB: readPayloadString(basePayload, 'tableB', 'tabla_b'),
+                    joinKeyA: readPayloadString(basePayload, 'joinKeyA', 'llave_cruce_a'),
+                    joinKeyB: readPayloadString(basePayload, 'joinKeyB', 'llave_cruce_b'),
+                    columnsA: readPayloadString(basePayload, 'columnsA', 'columnas_a'),
+                    columnsB: readPayloadString(basePayload, 'columnsB', 'columnas_b'),
+                    calculationMethods: metodosCalculo,
+                    targetTable: (0, tableNameFormatter_1.buildTargetTableName)(analysisName),
+                    callbackUrl,
                 };
-                if (resolvedCallbackUrl) {
-                    payloadToSend.callback_url = resolvedCallbackUrl;
-                }
-                (0, collapsLogger_1.logCollapsOperation)(NODE_NAME, 'execute()', { phase: 'merged_payload', payloadToSend }, 'Payload consolidado Input0+Input1 + UI (analysisName/targetTable).');
+                (0, collapsLogger_1.logCollapsOperation)(NODE_NAME, 'execute()', { phase: 'merged_payload', payloadToSend }, 'Payload camelCase consolidado para el contrato Condenser.');
                 const apiResponse = (await this.helpers.request({
                     method: 'POST',
                     uri: ENGINE_URL,

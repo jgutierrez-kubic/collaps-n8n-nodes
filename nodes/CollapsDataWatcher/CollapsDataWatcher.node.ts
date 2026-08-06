@@ -83,6 +83,11 @@ export class CollapsDataWatcher implements INodeType {
 				}
 
 				const connection = resolveConnectionConfig(input);
+				if (!connection) {
+					throw new Error(
+						'Valid PostgreSQL credentials are required from COLLAPS Database Connection.',
+					);
+				}
 				const qualifiedTable = `${quoteIdentifier(schema)}.${quoteIdentifier(tableName)}`;
 
 				const rows = await withPostgresConnection(connection, async (client) => {

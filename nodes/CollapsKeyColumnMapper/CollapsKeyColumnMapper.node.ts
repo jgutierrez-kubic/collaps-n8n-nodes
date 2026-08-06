@@ -12,7 +12,6 @@ import { NodeConnectionTypes, NodeOperationError } from 'n8n-workflow';
 
 import { resolveMapperResourceMapperFields } from '../helpers/mapperResourceMapper';
 import { logCollapsOperation } from '../helpers/collapsLogger';
-import { DEFAULT_SELECTOR_SCHEMA } from '../helpers/postgresClient';
 import {
 	firstColumn,
 	pairByIndex,
@@ -200,13 +199,17 @@ export class CollapsKeyColumnMapper implements INodeType {
 			const keyB = readInputBranch(this, 2, 'Key B');
 			const colsB = readInputBranch(this, 3, 'Columns B');
 
-			const schemaName =
-				String(keyA.schema ?? colsA.schema ?? keyB.schema ?? colsB.schema ?? '').trim() ||
-				DEFAULT_SELECTOR_SCHEMA;
+			const schemaName = String(
+				keyA.schema ?? colsA.schema ?? keyB.schema ?? colsB.schema ?? '',
+			).trim();
 			const llaveCruceA = firstColumn(keyA.columns);
 			const llaveCruceB = firstColumn(keyB.columns);
 			const columnsA = toColumnsArray(colsA.columns);
 			const columnsB = toColumnsArray(colsB.columns);
+
+			if (!schemaName) {
+				throw new Error('Schema is required from the connected Column Selector inputs.');
+			}
 
 			if (!llaveCruceA || !llaveCruceB) {
 				throw new Error('Key A and Key B must include at least one column in columns[].');

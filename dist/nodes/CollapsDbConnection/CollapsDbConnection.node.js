@@ -23,30 +23,30 @@ class CollapsDbConnection {
                     displayName: 'Host',
                     name: 'host',
                     type: 'string',
-                    default: postgresClient_1.CLOUDSQL_PUBLIC_HOST,
-                    required: false,
-                    description: 'PostgreSQL host. Default: COLLAPS public IP',
+                    default: '',
+                    required: true,
+                    description: 'PostgreSQL host. No implicit host is used.',
                 },
                 {
                     displayName: 'Port',
                     name: 'port',
                     type: 'number',
                     default: 5432,
-                    required: false,
+                    required: true,
                 },
                 {
                     displayName: 'Database',
                     name: 'database',
                     type: 'string',
-                    default: postgresClient_1.DEFAULT_POSTGRES_CREDENTIALS.database,
-                    required: false,
+                    default: '',
+                    required: true,
                 },
                 {
                     displayName: 'User',
                     name: 'user',
                     type: 'string',
-                    default: postgresClient_1.DEFAULT_POSTGRES_CREDENTIALS.user,
-                    required: false,
+                    default: '',
+                    required: true,
                 },
                 {
                     displayName: 'Password',
@@ -55,8 +55,8 @@ class CollapsDbConnection {
                     typeOptions: {
                         password: true,
                     },
-                    default: postgresClient_1.DEFAULT_POSTGRES_CREDENTIALS.password,
-                    required: false,
+                    default: '',
+                    required: true,
                 },
             ],
         };
@@ -69,12 +69,15 @@ class CollapsDbConnection {
             try {
                 const input = (_b = (_a = items[itemIndex]) === null || _a === void 0 ? void 0 : _a.json) !== null && _b !== void 0 ? _b : {};
                 const connection = (0, postgresClient_1.resolveConnectionConfig)(input, {
-                    host: this.getNodeParameter('host', itemIndex, postgresClient_1.CLOUDSQL_PUBLIC_HOST),
+                    host: this.getNodeParameter('host', itemIndex, ''),
                     port: this.getNodeParameter('port', itemIndex, 5432),
-                    database: this.getNodeParameter('database', itemIndex, 'collaps'),
-                    user: this.getNodeParameter('user', itemIndex, 'n8n_user'),
+                    database: this.getNodeParameter('database', itemIndex, ''),
+                    user: this.getNodeParameter('user', itemIndex, ''),
                     password: this.getNodeParameter('password', itemIndex, ''),
                 });
+                if (!connection) {
+                    throw new Error('Host, port, database, user and password are required.');
+                }
                 await (0, postgresClient_1.withPostgresConnection)(connection, async (client) => {
                     await client.query('SELECT 1');
                 });

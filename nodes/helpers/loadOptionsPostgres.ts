@@ -2,10 +2,8 @@ import type { ILoadOptionsFunctions, INodePropertyOptions, ResourceMapperField }
 
 import { queryWithCollapsLog } from './collapsLogger';
 import {
-	DEFAULT_SELECTOR_SCHEMA,
-	resolveConnectionConfig,
-	withPostgresConnection,
 	withPostgresClient,
+	type PostgresCredentials,
 } from './postgresClient';
 import { assertValidSqlIdentifier, isValidSqlIdentifier } from './sqlValidation';
 
@@ -43,6 +41,7 @@ export async function fetchTableNamesForSchema(
 	context: ILoadOptionsFunctions,
 	schema: string,
 	logMeta: { node: string; context: string },
+	connection?: PostgresCredentials,
 ): Promise<string[]> {
 	if (!isValidSqlIdentifier(schema)) {
 		return [];
@@ -63,7 +62,7 @@ export async function fetchTableNamesForSchema(
 			return result.rows
 				.map((row) => row.table_name)
 				.filter((tableName) => isValidSqlIdentifier(tableName));
-		});
+		}, connection);
 	} catch (error) {
 		console.error('[loadOptionsPostgres] fetchTableNamesForSchema error:', error);
 		return [];
@@ -78,6 +77,7 @@ export async function fetchTableColumns(
 		node: 'loadOptionsPostgres',
 		context: 'fetchTableColumns()',
 	},
+	connection?: PostgresCredentials,
 ): Promise<string[]> {
 	if (!isValidSqlIdentifier(schema) || !isValidSqlIdentifier(tableName)) {
 		return [];
@@ -99,7 +99,7 @@ export async function fetchTableColumns(
 			return result.rows
 				.map((row) => row.column_name)
 				.filter((column) => isValidSqlIdentifier(column));
-		});
+		}, connection);
 	} catch (error) {
 		console.error('[loadOptionsPostgres] fetchTableColumns error:', error);
 		return [];
@@ -121,8 +121,9 @@ export async function fetchColumnPropertyOptions(
 	schema: string,
 	tableName: string,
 	logMeta?: { node: string; context: string },
+	connection?: PostgresCredentials,
 ): Promise<INodePropertyOptions[]> {
-	const columns = await fetchTableColumns(context, schema, tableName, logMeta);
+	const columns = await fetchTableColumns(context, schema, tableName, logMeta, connection);
 	return toColumnPropertyOptions(columns);
 }
 
@@ -176,32 +177,4 @@ export async function fetchResourceMapperFieldsForTables(
 	}
 
 	return buildResourceMapperFields(columnsA, columnsB);
-}
-
-/** Direct SQL fetch without ILoadOptionsFunctions (execute-time fallback). */
-export async function fetchTableColumnsDirect(
-	schema: string,
-	tableName: string,
-): Promise<string[]> {
-	if (!isValidSqlIdentifier(schema) || !isValidSqlIdentifier(tableName)) {
-		return [];
-	}
-
-	const safeSchema = assertValidSqlIdentifier(schema, 'schema');
-	const safeTable = assertValidSqlIdentifier(tableName, 'tableName');
-	const connection = resolveConnectionConfig({});
-
-	return withPostgresConnection(connection, async (client) => {
-		const result = await queryWithCollapsLog<{ column_name: string }>(
-			client,
-			{ node: 'loadOptionsPostgres', context: 'fetchTableColumnsDirect()' },
-			COLUMNS_SQL,
-			[safeSchema, safeTable],
-			(rows) => rows.map((row) => row.column_name),
-		);
-
-		return result.rows
-			.map((row) => row.column_name)
-			.filter((column) => isValidSqlIdentifier(column));
-	});
 }

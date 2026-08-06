@@ -8,6 +8,7 @@ import type {
 import { NodeConnectionTypes, NodeOperationError } from 'n8n-workflow';
 
 import { logCollapsOperation } from '../helpers/collapsLogger';
+import { buildTargetTableName } from '../helpers/tableNameFormatter';
 
 const NODE_NAME = 'CollapsBttfTrigger';
 const ENGINE_URL = 'https://bttf-engine-31997537275.us-central1.run.app/api/v1/condenser/job';
@@ -42,18 +43,21 @@ function readRequiredMetodosCalculo(methodsItem: IDataObject | undefined): strin
 	);
 }
 
-function resolveTablaDestino(schemaName: unknown, targetTable: string): string {
-	const table = targetTable.trim();
-	if (!table) {
+function readPayloadString(
+	payload: IDataObject,
+	camelCaseKey: string,
+	legacyKey: string,
+): string {
+	return String(payload[camelCaseKey] ?? payload[legacyKey] ?? '').trim();
+}
+
+function resolveCallbackUrl(context: IExecuteFunctions): string {
+	try {
+		const value = context.evaluateExpression('{{ $execution.resumeUrl }}', 0);
+		return String(value ?? '').replace(/^=/, '').trim();
+	} catch {
 		return '';
 	}
-
-	if (table.includes('.')) {
-		return table;
-	}
-
-	const schema = String(schemaName ?? '').trim();
-	return schema ? `${schema}.${table}` : table;
 }
 
 export class CollapsBttfTrigger implements INodeType {
@@ -81,16 +85,8 @@ export class CollapsBttfTrigger implements INodeType {
 				type: 'string',
 				default: 'My Analysis',
 				required: true,
-				description: 'Human-readable analysis name sent as nombre_analisis.',
-			},
-			{
-				displayName: 'Target Table',
-				name: 'targetTable',
-				type: 'string',
-				default: 'c_resultados',
-				required: true,
 				description:
-					'Destination table for engine results (tabla_destino). Schema is prepended from the Mapper payload when omitted.',
+					'Human-readable analysis name. The targetTable API field is generated automatically as c_results_<camelCaseName>.',
 			},
 		],
 	};
@@ -131,48 +127,34 @@ export class CollapsBttfTrigger implements INodeType {
 				const analysisName = String(
 					this.getNodeParameter('analysisName', itemIndex, 'My Analysis') ?? 'My Analysis',
 				).trim();
-				const targetTable = String(
-					this.getNodeParameter('targetTable', itemIndex, 'c_resultados') ?? 'c_resultados',
-				).trim();
 
 				if (!analysisName) {
 					throw new Error('Analysis Name (analysisName) is required.');
 				}
 
-				if (!targetTable) {
-					throw new Error('Target Table (targetTable) is required.');
-				}
-
-				let resolvedCallbackUrl = '';
-				try {
-					resolvedCallbackUrl = this.evaluateExpression(
-						'{{ $execution.resumeUrl }}',
-						0,
-					) as string;
-					resolvedCallbackUrl = String(resolvedCallbackUrl ?? '')
-						.replace(/^=/, '')
-						.trim();
-				} catch {
-					// If evaluation fails or Wait/resume is not available, leave empty.
-				}
-				resolvedCallbackUrl = String(resolvedCallbackUrl ?? '').trim();
+				const callbackUrl = resolveCallbackUrl(this);
 
 				const payloadToSend: IDataObject = {
-					...basePayload,
-					metodos_calculo: metodosCalculo,
-					nombre_analisis: analysisName,
-					tabla_destino: resolveTablaDestino(basePayload.schema_name, targetTable),
+					source: readPayloadString(basePayload, 'source', 'source'),
+					analysisId: readPayloadString(basePayload, 'analysisId', 'analysis_id'),
+					schemaName: readPayloadString(basePayload, 'schemaName', 'schema_name'),
+					analysisName,
+					tableA: readPayloadString(basePayload, 'tableA', 'tabla_a'),
+					tableB: readPayloadString(basePayload, 'tableB', 'tabla_b'),
+					joinKeyA: readPayloadString(basePayload, 'joinKeyA', 'llave_cruce_a'),
+					joinKeyB: readPayloadString(basePayload, 'joinKeyB', 'llave_cruce_b'),
+					columnsA: readPayloadString(basePayload, 'columnsA', 'columnas_a'),
+					columnsB: readPayloadString(basePayload, 'columnsB', 'columnas_b'),
+					calculationMethods: metodosCalculo,
+					targetTable: buildTargetTableName(analysisName),
+					callbackUrl,
 				};
-
-				if (resolvedCallbackUrl) {
-					payloadToSend.callback_url = resolvedCallbackUrl;
-				}
 
 				logCollapsOperation(
 					NODE_NAME,
 					'execute()',
 					{ phase: 'merged_payload', payloadToSend },
-					'Payload consolidado Input0+Input1 + UI (analysisName/targetTable).',
+					'Payload camelCase consolidado para el contrato Condenser.',
 				);
 
 				const apiResponse = (await this.helpers.request({

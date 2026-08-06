@@ -3,7 +3,6 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.tryGetUpstreamJsonAtInput = tryGetUpstreamJsonAtInput;
 exports.resolveMapperUpstreamContext = resolveMapperUpstreamContext;
 const pickerUtils_1 = require("./pickerUtils");
-const postgresClient_1 = require("./postgresClient");
 const upstreamContext_1 = require("./upstreamContext");
 const transformerPairing_1 = require("./transformerPairing");
 const sqlValidation_1 = require("./sqlValidation");
@@ -63,7 +62,7 @@ function readSchemaFromSelectorAncestors(context, selectorNodeName) {
             }
         }
     }
-    return postgresClient_1.DEFAULT_SELECTOR_SCHEMA;
+    return '';
 }
 function readTableNameFromSelectorAncestors(context, selectorNodeName) {
     var _a;
@@ -103,7 +102,7 @@ function mergeBranchContexts(primary, fallback) {
     if (!tableName) {
         return undefined;
     }
-    const schema = (primary === null || primary === void 0 ? void 0 : primary.schema) || (fallback === null || fallback === void 0 ? void 0 : fallback.schema) || postgresClient_1.DEFAULT_SELECTOR_SCHEMA;
+    const schema = (primary === null || primary === void 0 ? void 0 : primary.schema) || (fallback === null || fallback === void 0 ? void 0 : fallback.schema) || '';
     const columns = (primary === null || primary === void 0 ? void 0 : primary.columns) && primary.columns.length > 0
         ? primary.columns
         : (fallback === null || fallback === void 0 ? void 0 : fallback.columns) && fallback.columns.length > 0

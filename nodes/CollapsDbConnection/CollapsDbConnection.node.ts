@@ -7,12 +7,7 @@ import type {
 } from 'n8n-workflow';
 import { NodeConnectionTypes, NodeOperationError } from 'n8n-workflow';
 
-import {
-	CLOUDSQL_PUBLIC_HOST,
-	DEFAULT_POSTGRES_CREDENTIALS,
-	resolveConnectionConfig,
-	withPostgresConnection,
-} from '../helpers/postgresClient';
+import { resolveConnectionConfig, withPostgresConnection } from '../helpers/postgresClient';
 
 interface DbConnectionOutput {
 	host: string;
@@ -43,30 +38,30 @@ export class CollapsDbConnection implements INodeType {
 				displayName: 'Host',
 				name: 'host',
 				type: 'string',
-				default: CLOUDSQL_PUBLIC_HOST,
-				required: false,
-				description: 'PostgreSQL host. Default: COLLAPS public IP',
+				default: '',
+				required: true,
+				description: 'PostgreSQL host. No implicit host is used.',
 			},
 			{
 				displayName: 'Port',
 				name: 'port',
 				type: 'number',
 				default: 5432,
-				required: false,
+				required: true,
 			},
 			{
 				displayName: 'Database',
 				name: 'database',
 				type: 'string',
-				default: DEFAULT_POSTGRES_CREDENTIALS.database,
-				required: false,
+				default: '',
+				required: true,
 			},
 			{
 				displayName: 'User',
 				name: 'user',
 				type: 'string',
-				default: DEFAULT_POSTGRES_CREDENTIALS.user,
-				required: false,
+				default: '',
+				required: true,
 			},
 			{
 				displayName: 'Password',
@@ -75,8 +70,8 @@ export class CollapsDbConnection implements INodeType {
 				typeOptions: {
 					password: true,
 				},
-				default: DEFAULT_POSTGRES_CREDENTIALS.password,
-				required: false,
+				default: '',
+				required: true,
 			},
 		],
 	};
@@ -89,12 +84,15 @@ export class CollapsDbConnection implements INodeType {
 			try {
 				const input = items[itemIndex]?.json ?? {};
 				const connection = resolveConnectionConfig(input, {
-					host: this.getNodeParameter('host', itemIndex, CLOUDSQL_PUBLIC_HOST) as string,
+					host: this.getNodeParameter('host', itemIndex, '') as string,
 					port: this.getNodeParameter('port', itemIndex, 5432) as number,
-					database: this.getNodeParameter('database', itemIndex, 'collaps') as string,
-					user: this.getNodeParameter('user', itemIndex, 'n8n_user') as string,
+					database: this.getNodeParameter('database', itemIndex, '') as string,
+					user: this.getNodeParameter('user', itemIndex, '') as string,
 					password: this.getNodeParameter('password', itemIndex, '') as string,
 				});
+				if (!connection) {
+					throw new Error('Host, port, database, user and password are required.');
+				}
 
 				await withPostgresConnection(connection, async (client) => {
 					await client.query('SELECT 1');

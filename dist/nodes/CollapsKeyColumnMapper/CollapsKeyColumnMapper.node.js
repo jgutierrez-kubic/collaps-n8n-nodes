@@ -4,7 +4,6 @@ exports.CollapsKeyColumnMapper = void 0;
 const n8n_workflow_1 = require("n8n-workflow");
 const mapperResourceMapper_1 = require("../helpers/mapperResourceMapper");
 const collapsLogger_1 = require("../helpers/collapsLogger");
-const postgresClient_1 = require("../helpers/postgresClient");
 const transformerPairing_1 = require("../helpers/transformerPairing");
 function readInputBranch(context, inputIndex, label) {
     var _a;
@@ -135,12 +134,14 @@ class CollapsKeyColumnMapper {
             const colsA = readInputBranch(this, 1, 'Columns A');
             const keyB = readInputBranch(this, 2, 'Key B');
             const colsB = readInputBranch(this, 3, 'Columns B');
-            const schemaName = String((_d = (_c = (_b = (_a = keyA.schema) !== null && _a !== void 0 ? _a : colsA.schema) !== null && _b !== void 0 ? _b : keyB.schema) !== null && _c !== void 0 ? _c : colsB.schema) !== null && _d !== void 0 ? _d : '').trim() ||
-                postgresClient_1.DEFAULT_SELECTOR_SCHEMA;
+            const schemaName = String((_d = (_c = (_b = (_a = keyA.schema) !== null && _a !== void 0 ? _a : colsA.schema) !== null && _b !== void 0 ? _b : keyB.schema) !== null && _c !== void 0 ? _c : colsB.schema) !== null && _d !== void 0 ? _d : '').trim();
             const llaveCruceA = (0, transformerPairing_1.firstColumn)(keyA.columns);
             const llaveCruceB = (0, transformerPairing_1.firstColumn)(keyB.columns);
             const columnsA = (0, transformerPairing_1.toColumnsArray)(colsA.columns);
             const columnsB = (0, transformerPairing_1.toColumnsArray)(colsB.columns);
+            if (!schemaName) {
+                throw new Error('Schema is required from the connected Column Selector inputs.');
+            }
             if (!llaveCruceA || !llaveCruceB) {
                 throw new Error('Key A and Key B must include at least one column in columns[].');
             }

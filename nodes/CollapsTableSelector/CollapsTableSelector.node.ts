@@ -10,12 +10,16 @@ import type {
 import { NodeConnectionTypes, NodeOperationError } from 'n8n-workflow';
 
 import { logCollapsOperation } from '../helpers/collapsLogger';
-import { fetchTableNamesForSchema } from '../helpers/loadOptionsPostgres';
 import {
-	readSchemaFromUpstreamInput,
-	readValidatedTableNameFromParameter,
-	tryGetUpstreamJson,
-} from '../helpers/upstreamContext';
+	resolveLoadOptionsConnection,
+	upstreamConnectionProperties,
+} from '../helpers/loadOptionsConnection';
+import {
+	fetchTableNamesForSchema,
+	readCurrentNodeString,
+} from '../helpers/loadOptionsPostgres';
+import { isValidSqlIdentifier } from '../helpers/sqlValidation';
+import { readValidatedTableNameFromParameter } from '../helpers/upstreamContext';
 
 const NODE_NAME = 'CollapsTableSelector';
 
@@ -40,13 +44,13 @@ export class CollapsTableSelector implements INodeType {
 		inputs: [NodeConnectionTypes.Main],
 		outputs: [NodeConnectionTypes.Main],
 		properties: [
+			...upstreamConnectionProperties(),
 			{
-				displayName: 'Automated Discovery',
-				name: 'discoveryNotice',
-				type: 'notice',
-				default: '',
-				description:
-					'Tables are loaded live from PostgreSQL using the schema from the upstream Schema Fetcher connection.',
+				displayName: 'Internal Schema Name',
+				name: 'schemaName',
+				type: 'hidden',
+				default:
+					'={{ $node["COLLAPS Schema Fetcher"].parameter["selectedSchema"] }}',
 			},
 			{
 				displayName: 'Table Name',
@@ -54,11 +58,19 @@ export class CollapsTableSelector implements INodeType {
 				type: 'options',
 				typeOptions: {
 					loadOptionsMethod: 'getTableOptions',
+					loadOptionsDependsOn: [
+						'schemaName',
+						'connectionHost',
+						'connectionPort',
+						'connectionDatabase',
+						'connectionUser',
+						'connectionPassword',
+					],
 					searchable: true,
 				},
 				default: '',
 				required: false,
-				placeholder: 'Select a table',
+				placeholder: 'Requiere ejecución de nodos previos',
 				description: 'Single table selection from information_schema.tables.',
 			},
 		],
@@ -67,13 +79,22 @@ export class CollapsTableSelector implements INodeType {
 	methods = {
 		loadOptions: {
 			async getTableOptions(this: ILoadOptionsFunctions): Promise<INodePropertyOptions[]> {
+				const logMeta = { node: NODE_NAME, context: 'getTableOptions()' };
+
 				try {
-					const upstream = await tryGetUpstreamJson(this);
-					const schema = readSchemaFromUpstreamInput(upstream);
-					const tables = await fetchTableNamesForSchema(this, schema, {
-						node: NODE_NAME,
-						context: 'getTableOptions()',
-					});
+					const connection = resolveLoadOptionsConnection(this);
+					const schema = readCurrentNodeString(this, 'schemaName');
+					if (!connection || !isValidSqlIdentifier(schema)) {
+						logCollapsOperation(
+							NODE_NAME,
+							'getTableOptions()',
+							{ hasConnection: Boolean(connection), schema: schema || null },
+							'Previous nodes must be executed before loading tables.',
+						);
+						return [];
+					}
+
+					const tables = await fetchTableNamesForSchema(this, schema, logMeta, connection);
 
 					const options = tables.map((table) => ({
 						name: table,
@@ -102,12 +123,18 @@ export class CollapsTableSelector implements INodeType {
 
 		for (let itemIndex = 0; itemIndex < items.length; itemIndex++) {
 			try {
-				const input = items[itemIndex]?.json ?? {};
-				const schema = readSchemaFromUpstreamInput(input);
+				const schema = String(
+					this.getNodeParameter('schemaName', itemIndex, ''),
+				).trim();
 				const tableName = readValidatedTableNameFromParameter(
 					this.getNodeParameter('tableName', itemIndex, ''),
 				);
 
+				if (!isValidSqlIdentifier(schema)) {
+					throw new Error(
+						'Schema Name is unavailable. Execute COLLAPS Schema Fetcher first.',
+					);
+				}
 				if (!tableName) {
 					throw new NodeOperationError(
 						this.getNode(),

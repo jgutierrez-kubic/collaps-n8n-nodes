@@ -6,7 +6,6 @@ exports.readMapperTableParams = readMapperTableParams;
 exports.readMapperResourceMapperFields = readMapperResourceMapperFields;
 const mapperResourceMapper_1 = require("./mapperResourceMapper");
 const mapperUpstreamContext_1 = require("./mapperUpstreamContext");
-const postgresClient_1 = require("./postgresClient");
 const transformerPairing_1 = require("./transformerPairing");
 function findParentKeyColumnMapper(context) {
     const parents = context.getParentNodes(context.getNode().name, {
@@ -74,7 +73,7 @@ async function readMapperTableParams(context) {
     var _a, _b, _c, _d, _e, _f;
     const { sideA, sideB } = await (0, mapperUpstreamContext_1.resolveMapperUpstreamContext)(context);
     return {
-        schemaName: (_b = (_a = sideA === null || sideA === void 0 ? void 0 : sideA.schema) !== null && _a !== void 0 ? _a : sideB === null || sideB === void 0 ? void 0 : sideB.schema) !== null && _b !== void 0 ? _b : postgresClient_1.DEFAULT_SELECTOR_SCHEMA,
+        schemaName: (_b = (_a = sideA === null || sideA === void 0 ? void 0 : sideA.schema) !== null && _a !== void 0 ? _a : sideB === null || sideB === void 0 ? void 0 : sideB.schema) !== null && _b !== void 0 ? _b : '',
         tableNameA: (_c = sideA === null || sideA === void 0 ? void 0 : sideA.tableName) !== null && _c !== void 0 ? _c : '',
         tableNameB: (_d = sideB === null || sideB === void 0 ? void 0 : sideB.tableName) !== null && _d !== void 0 ? _d : '',
         columnsA: (_e = sideA === null || sideA === void 0 ? void 0 : sideA.columns) !== null && _e !== void 0 ? _e : [],

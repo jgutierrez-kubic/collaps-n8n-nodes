@@ -2,7 +2,6 @@ import type { IDataObject, ILoadOptionsFunctions, INodeExecutionData } from 'n8n
 
 import { readTableNameFromJson, normalizeSelectedTableName } from './pickerUtils';
 import { readCurrentNodeString } from './loadOptionsPostgres';
-import { DEFAULT_SELECTOR_SCHEMA } from './postgresClient';
 import { isValidSqlIdentifier } from './sqlValidation';
 
 type LoadOptionsContext = ILoadOptionsFunctions & {
@@ -54,26 +53,70 @@ export async function tryGetUpstreamJson(context: ILoadOptionsFunctions): Promis
 	return {};
 }
 
+function findParentNodeByType(
+	context: ILoadOptionsFunctions,
+	baseTypes: string[],
+): { parameters?: IDataObject } | undefined {
+	let parents: Array<{ type: string; parameters?: IDataObject }>;
+
+	try {
+		parents = context.getParentNodes(context.getNode().name, {
+			includeNodeParameters: true,
+			depth: 12,
+		}) as Array<{ type: string; parameters?: IDataObject }>;
+	} catch {
+		return undefined;
+	}
+
+	return parents.find((parent) => {
+		const type = String(parent.type ?? '');
+		return baseTypes.some((base) => type === base || type.endsWith(`.${base}`));
+	});
+}
+
 function findParentTableSelectorNode(
 	context: ILoadOptionsFunctions,
 ): { parameters?: IDataObject } | undefined {
-	const parents = context.getParentNodes(context.getNode().name, {
-		includeNodeParameters: true,
-		depth: 12,
-	});
-
-	return parents.find(
-		(parent) =>
-			parent.type === 'collapsTableSelector' ||
-			parent.type.endsWith('.collapsTableSelector') ||
-			parent.type === 'collapsTablePicker' ||
-			parent.type.endsWith('.collapsTablePicker'),
-	) as { parameters?: IDataObject } | undefined;
+	return findParentNodeByType(context, ['collapsTableSelector', 'collapsTablePicker']);
 }
 
 export function readSchemaFromUpstreamInput(input: IDataObject): string {
-	const schema = String(input.schema ?? input.selectedSchema ?? DEFAULT_SELECTOR_SCHEMA).trim();
-	return isValidSqlIdentifier(schema) ? schema : DEFAULT_SELECTOR_SCHEMA;
+	return readSchemaFromUpstreamInputStrict(input);
+}
+
+/** Design-time resolution: an absent upstream schema must stay empty so no query is attempted. */
+export function readSchemaFromUpstreamInputStrict(input: IDataObject): string {
+	const schema = String(input.selectedSchema ?? input.schema ?? '').trim();
+	return isValidSqlIdentifier(schema) ? schema : '';
+}
+
+/**
+ * Resolves the schema the Table Selector must list tables for.
+ *
+ * Order matters: the hidden expression parameter is the only source that survives the
+ * design-time sandbox, the live input JSON covers pinned/executed data, and the parent
+ * Schema Fetcher parameter is the last resort when nothing has run yet.
+ */
+export async function resolveSchemaForTableSelector(
+	context: ILoadOptionsFunctions,
+): Promise<string> {
+	const fromHiddenParameter = readHiddenNodeParameter(context, 'upstreamSchema');
+	if (isValidSqlIdentifier(fromHiddenParameter)) {
+		return fromHiddenParameter;
+	}
+
+	const upstream = await tryGetUpstreamJson(context);
+	const fromConnection = readSchemaFromUpstreamInputStrict(upstream);
+	if (fromConnection) {
+		return fromConnection;
+	}
+
+	const parentSchemaFetcher = findParentNodeByType(context, ['collapsSchemaFetcher']);
+	const fromParentParameter = String(
+		parentSchemaFetcher?.parameters?.selectedSchema ?? '',
+	).trim();
+
+	return isValidSqlIdentifier(fromParentParameter) ? fromParentParameter : '';
 }
 
 export function readValidatedTableNameFromInput(input: IDataObject): string {
@@ -117,17 +160,20 @@ export async function resolveSchemaForColumnSelector(
 	context: ILoadOptionsFunctions,
 ): Promise<string> {
 	const fromHiddenParameter = readHiddenNodeParameter(context, 'upstreamSchema');
-	if (fromHiddenParameter && isValidSqlIdentifier(fromHiddenParameter)) {
+	if (isValidSqlIdentifier(fromHiddenParameter)) {
 		return fromHiddenParameter;
 	}
 
 	const upstream = await tryGetUpstreamJson(context);
-	const fromConnection = readSchemaFromUpstreamInput(upstream);
+	const fromConnection = readSchemaFromUpstreamInputStrict(upstream);
 	if (fromConnection) {
 		return fromConnection;
 	}
 
-	return DEFAULT_SELECTOR_SCHEMA;
+	const parentTableSelector = findParentTableSelectorNode(context);
+	const fromParentParameter = String(parentTableSelector?.parameters?.upstreamSchema ?? '').trim();
+
+	return isValidSqlIdentifier(fromParentParameter) ? fromParentParameter : '';
 }
 
 export async function resolveContextForColumnSelector(

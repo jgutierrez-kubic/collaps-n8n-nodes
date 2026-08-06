@@ -6,7 +6,6 @@ import type {
 } from 'n8n-workflow';
 
 import { parseColumnsInput } from './pickerUtils';
-import { DEFAULT_SELECTOR_SCHEMA } from './postgresClient';
 import {
 	readSchemaFromUpstreamInput,
 	readValidatedTableNameFromInput,
@@ -98,7 +97,7 @@ function readSchemaFromSelectorAncestors(
 		}
 	}
 
-	return DEFAULT_SELECTOR_SCHEMA;
+	return '';
 }
 
 function readTableNameFromSelectorAncestors(
@@ -155,7 +154,7 @@ function mergeBranchContexts(
 		return undefined;
 	}
 
-	const schema = primary?.schema || fallback?.schema || DEFAULT_SELECTOR_SCHEMA;
+	const schema = primary?.schema || fallback?.schema || '';
 	const columns =
 		primary?.columns && primary.columns.length > 0
 			? primary.columns

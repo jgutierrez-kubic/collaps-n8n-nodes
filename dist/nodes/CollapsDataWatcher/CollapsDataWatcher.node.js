@@ -66,6 +66,9 @@ class CollapsDataWatcher {
                     continue;
                 }
                 const connection = (0, postgresClient_1.resolveConnectionConfig)(input);
+                if (!connection) {
+                    throw new Error('Valid PostgreSQL credentials are required from COLLAPS Database Connection.');
+                }
                 const qualifiedTable = `${(0, postgresClient_1.quoteIdentifier)(schema)}.${(0, postgresClient_1.quoteIdentifier)(tableName)}`;
                 const rows = await (0, postgresClient_1.withPostgresConnection)(connection, async (client) => {
                     const result = await client.query(`SELECT * FROM ${qualifiedTable} LIMIT 10`);

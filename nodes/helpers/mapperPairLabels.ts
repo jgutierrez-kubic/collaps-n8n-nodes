@@ -3,7 +3,6 @@ import type { ILoadOptionsFunctions, ResourceMapperValue } from 'n8n-workflow';
 import { buildResourceMapperFields } from './loadOptionsPostgres';
 import { resolveMapperResourceMapperFields } from './mapperResourceMapper';
 import { resolveMapperUpstreamContext } from './mapperUpstreamContext';
-import { DEFAULT_SELECTOR_SCHEMA } from './postgresClient';
 import { buildPairLabel, pairByIndex, type ColumnPair } from './transformerPairing';
 
 function findParentKeyColumnMapper(
@@ -98,7 +97,7 @@ export async function readMapperTableParams(context: ILoadOptionsFunctions): Pro
 	const { sideA, sideB } = await resolveMapperUpstreamContext(context);
 
 	return {
-		schemaName: sideA?.schema ?? sideB?.schema ?? DEFAULT_SELECTOR_SCHEMA,
+		schemaName: sideA?.schema ?? sideB?.schema ?? '',
 		tableNameA: sideA?.tableName ?? '',
 		tableNameB: sideB?.tableName ?? '',
 		columnsA: sideA?.columns ?? [],

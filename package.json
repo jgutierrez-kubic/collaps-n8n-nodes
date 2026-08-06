@@ -28,7 +28,10 @@
       "dist/nodes/CollapsDataWatcher/CollapsDataWatcher.node.js",
       "dist/nodes/CollapsMethodConfigurator/CollapsMethodConfigurator.node.js",
       "dist/nodes/CollapsKeyColumnMapper/CollapsKeyColumnMapper.node.js",
-      "dist/nodes/CollapsBttfTrigger/CollapsBttfTrigger.node.js"
+      "dist/nodes/CollapsBttfTrigger/CollapsBttfTrigger.node.js",
+      "dist/nodes/CollapsWorkTableGenerator/CollapsWorkTableGenerator.node.js",
+      "dist/nodes/CollapsColumnHeaderTransposer/CollapsColumnHeaderTransposer.node.js",
+      "dist/nodes/CollapsRefinerTrigger/CollapsRefinerTrigger.node.js"
     ]
   },
   "dependencies": {

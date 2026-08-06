@@ -7,7 +7,6 @@ exports.toColumnPropertyOptions = toColumnPropertyOptions;
 exports.fetchColumnPropertyOptions = fetchColumnPropertyOptions;
 exports.buildResourceMapperFields = buildResourceMapperFields;
 exports.fetchResourceMapperFieldsForTables = fetchResourceMapperFieldsForTables;
-exports.fetchTableColumnsDirect = fetchTableColumnsDirect;
 const collapsLogger_1 = require("./collapsLogger");
 const postgresClient_1 = require("./postgresClient");
 const sqlValidation_1 = require("./sqlValidation");
@@ -35,7 +34,7 @@ function readCurrentNodeString(context, parameterName, fallback = '') {
         return fallback;
     }
 }
-async function fetchTableNamesForSchema(context, schema, logMeta) {
+async function fetchTableNamesForSchema(context, schema, logMeta, connection) {
     if (!(0, sqlValidation_1.isValidSqlIdentifier)(schema)) {
         return [];
     }
@@ -46,7 +45,7 @@ async function fetchTableNamesForSchema(context, schema, logMeta) {
             return result.rows
                 .map((row) => row.table_name)
                 .filter((tableName) => (0, sqlValidation_1.isValidSqlIdentifier)(tableName));
-        });
+        }, connection);
     }
     catch (error) {
         console.error('[loadOptionsPostgres] fetchTableNamesForSchema error:', error);
@@ -56,7 +55,7 @@ async function fetchTableNamesForSchema(context, schema, logMeta) {
 async function fetchTableColumns(context, schema, tableName, logMeta = {
     node: 'loadOptionsPostgres',
     context: 'fetchTableColumns()',
-}) {
+}, connection) {
     if (!(0, sqlValidation_1.isValidSqlIdentifier)(schema) || !(0, sqlValidation_1.isValidSqlIdentifier)(tableName)) {
         return [];
     }
@@ -68,7 +67,7 @@ async function fetchTableColumns(context, schema, tableName, logMeta = {
             return result.rows
                 .map((row) => row.column_name)
                 .filter((column) => (0, sqlValidation_1.isValidSqlIdentifier)(column));
-        });
+        }, connection);
     }
     catch (error) {
         console.error('[loadOptionsPostgres] fetchTableColumns error:', error);
@@ -84,8 +83,8 @@ function toColumnPropertyOptions(columns) {
         value: column,
     }));
 }
-async function fetchColumnPropertyOptions(context, schema, tableName, logMeta) {
-    const columns = await fetchTableColumns(context, schema, tableName, logMeta);
+async function fetchColumnPropertyOptions(context, schema, tableName, logMeta, connection) {
+    const columns = await fetchTableColumns(context, schema, tableName, logMeta, connection);
     return toColumnPropertyOptions(columns);
 }
 function buildResourceMapperFields(columnsA, columnsB) {
@@ -124,19 +123,4 @@ async function fetchResourceMapperFieldsForTables(context, schema, tableNameA, t
         return [];
     }
     return buildResourceMapperFields(columnsA, columnsB);
-}
-/** Direct SQL fetch without ILoadOptionsFunctions (execute-time fallback). */
-async function fetchTableColumnsDirect(schema, tableName) {
-    if (!(0, sqlValidation_1.isValidSqlIdentifier)(schema) || !(0, sqlValidation_1.isValidSqlIdentifier)(tableName)) {
-        return [];
-    }
-    const safeSchema = (0, sqlValidation_1.assertValidSqlIdentifier)(schema, 'schema');
-    const safeTable = (0, sqlValidation_1.assertValidSqlIdentifier)(tableName, 'tableName');
-    const connection = (0, postgresClient_1.resolveConnectionConfig)({});
-    return (0, postgresClient_1.withPostgresConnection)(connection, async (client) => {
-        const result = await (0, collapsLogger_1.queryWithCollapsLog)(client, { node: 'loadOptionsPostgres', context: 'fetchTableColumnsDirect()' }, COLUMNS_SQL, [safeSchema, safeTable], (rows) => rows.map((row) => row.column_name));
-        return result.rows
-            .map((row) => row.column_name)
-            .filter((column) => (0, sqlValidation_1.isValidSqlIdentifier)(column));
-    });
 }

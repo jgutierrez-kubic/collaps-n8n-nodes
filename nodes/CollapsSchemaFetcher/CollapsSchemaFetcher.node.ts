@@ -15,6 +15,10 @@ import {
 	withPostgresConnection,
 } from '../helpers/postgresClient';
 import { logCollapsOperation } from '../helpers/collapsLogger';
+import {
+	resolveLoadOptionsConnection,
+	upstreamConnectionProperties,
+} from '../helpers/loadOptionsConnection';
 import { fetchRealSchemas } from '../helpers/schemaQueries';
 
 interface SchemaFetcherOutput {
@@ -42,17 +46,25 @@ export class CollapsSchemaFetcher implements INodeType {
 		inputs: [NodeConnectionTypes.Main],
 		outputs: [NodeConnectionTypes.Main],
 		properties: [
+			...upstreamConnectionProperties(),
 			{
 				displayName: 'Selected Schema',
 				name: 'selectedSchema',
 				type: 'options',
 				typeOptions: {
 					loadOptionsMethod: 'getSchemaOptions',
+					loadOptionsDependsOn: [
+						'connectionHost',
+						'connectionPort',
+						'connectionDatabase',
+						'connectionUser',
+						'connectionPassword',
+					],
 					searchable: true,
 				},
 				default: '',
-				required: false,
-				placeholder: 'Select or type schema (e.g. s00001_incancer)',
+				required: true,
+				placeholder: 'Requiere ejecución de nodos previos',
 				description: 'Selected schema from the real catalog',
 			},
 		],
@@ -61,32 +73,39 @@ export class CollapsSchemaFetcher implements INodeType {
 	methods = {
 		loadOptions: {
 			async getSchemaOptions(this: ILoadOptionsFunctions): Promise<INodePropertyOptions[]> {
-				const connection = resolveConnectionConfig({});
+				const connection = resolveLoadOptionsConnection(this);
+				if (!connection) {
+					return [];
+				}
 
-				return withPostgresConnection(connection, async (client) => {
-					const schemasList = await fetchRealSchemas(
-						client,
-						'CollapsSchemaFetcher',
-						'getSchemaOptions()',
-					);
-					if (!Array.isArray(schemasList)) {
-						return [];
-					}
+				try {
+					return await withPostgresConnection(connection, async (client) => {
+						const schemasList = await fetchRealSchemas(
+							client,
+							'CollapsSchemaFetcher',
+							'getSchemaOptions()',
+						);
+						if (!Array.isArray(schemasList)) {
+							return [];
+						}
 
-					const options = schemasList.map((schemaName) => ({
-						name: String(schemaName),
-						value: String(schemaName),
-					}));
+						const options = schemasList.map((schemaName) => ({
+							name: String(schemaName),
+							value: String(schemaName),
+						}));
 
-					logCollapsOperation(
-						'CollapsSchemaFetcher',
-						'getSchemaOptions()',
-						options.map((option) => option.value),
-						'Opciones de esquema cargadas para el dropdown.',
-					);
+						logCollapsOperation(
+							'CollapsSchemaFetcher',
+							'getSchemaOptions()',
+							options.map((option) => option.value),
+							'Opciones de esquema cargadas para el dropdown.',
+						);
 
-					return options;
-				});
+						return options;
+					});
+				} catch {
+					return [];
+				}
 			},
 		},
 	};
@@ -99,6 +118,11 @@ export class CollapsSchemaFetcher implements INodeType {
 			try {
 				const input = items[itemIndex]?.json ?? {};
 				const connection = resolveConnectionConfig(input);
+				if (!connection) {
+					throw new Error(
+						'Valid PostgreSQL credentials are required from COLLAPS Database Connection.',
+					);
+				}
 				const selectedSchema = this.getNodeParameter('selectedSchema', itemIndex, '') as string;
 
 				const output = await withPostgresConnection(connection, async (client) => {
@@ -108,6 +132,11 @@ export class CollapsSchemaFetcher implements INodeType {
 						selectedSchema,
 						schema: selectedSchema,
 					});
+					if (!schema) {
+						throw new Error(
+							'Selected Schema is required. Execute the Database Connection and select a schema.',
+						);
+					}
 
 					const payload: SchemaFetcherOutput = {
 						totalSchemas: schemas.length,
